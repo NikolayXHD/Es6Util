@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Es6Util", "Es6Util\Es6Util.csproj", "{D89CED8F-4EBC-4B1B-9640-08A974C0775E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{D55CECD5-C277-4DB2-92AF-AE6DFEB603B6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D89CED8F-4EBC-4B1B-9640-08A974C0775E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D89CED8F-4EBC-4B1B-9640-08A974C0775E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D89CED8F-4EBC-4B1B-9640-08A974C0775E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D89CED8F-4EBC-4B1B-9640-08A974C0775E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D55CECD5-C277-4DB2-92AF-AE6DFEB603B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D55CECD5-C277-4DB2-92AF-AE6DFEB603B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D55CECD5-C277-4DB2-92AF-AE6DFEB603B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D55CECD5-C277-4DB2-92AF-AE6DFEB603B6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
