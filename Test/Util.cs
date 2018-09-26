@@ -22,7 +22,9 @@ namespace Es6Util.Test
 		[Test]
 		public void Convert()
 		{
-			Es6Converter.UpdateOriginalFile(@"D:\temp\cart.js", @"D:\temp\cart.original.js");
+			Es6Converter.CreateConvertedFile(
+				@"D:\temp\customizeMarketplaceRepresentation.original.js",
+				@"D:\temp\customizeMarketplaceRepresentation.js");
 		}
 
 		const string sourceDir = @"D:\repo\Git\shopping-experience-develop-2\application\src";

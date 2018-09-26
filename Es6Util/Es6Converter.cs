@@ -494,7 +494,7 @@ namespace Es6Util
 			return null;
 		}
 
-		private static readonly Regex _commentOrStringLiteralPattern = new Regex(@"(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)|'(?:[^']|(?<=\\)')*'|""(?:[^']|(?<=\\)"")*"")");
+		private static readonly Regex _commentOrStringLiteralPattern = new Regex(@"(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)|'(?:[^']|(?<=\\)')*'|""(?:[^""]|(?<=\\)"")*"")");
 
 		private static readonly Regex _scopeOpenerPattern = new Regex("{");
 		private static readonly Regex _scopeCloserPattern = new Regex("}");
