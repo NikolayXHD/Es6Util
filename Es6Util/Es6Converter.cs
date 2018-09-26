@@ -14,7 +14,7 @@ namespace Es6Util
 			SyncDirectories(inputPath, outputPath, CreateConvertedFile);
 
 		public static void UpdateOriginalDirectory(string convertedPath, string originalPath) =>
-			SyncDirectories(convertedPath, originalPath, (convertedFile, originalFile) => UpdateOriginalFile(convertedFile, originalFile));
+			SyncDirectories(convertedPath, originalPath, UpdateOriginalFile);
 
 		private static void SyncDirectories(string inputPath, string outputPath, Action<string, string> syncFiles)
 		{
@@ -68,7 +68,7 @@ namespace Es6Util
 			File.WriteAllText(outputFile, convertedContent);
 		}
 
-		private static void UpdateOriginalFile(string convertedFile, string originalFile)
+		public static void UpdateOriginalFile(string convertedFile, string originalFile)
 		{
 			var convertedContent = new Lazy<string>(() =>
 				File.ReadAllText(convertedFile));
@@ -88,7 +88,7 @@ namespace Es6Util
 			else
 			{
 				Match oldModuleMatch = _oldModulePattern.Match(originalContent.Value);
-				string content = ConvertFromEs6(convertedContent.Value, eol: GetEol(originalContent.Value), oldModuleMatch);
+				string content = ConvertFromEs6(convertedContent.Value, eol: GetEol(originalContent.Value), oldModuleMatch, originalFile);
 
 				var trailingWhitespaces = new Regex(@"[\s\n]+$").Match(originalContent.Value);
 				if (trailingWhitespaces.Success)
@@ -188,7 +188,7 @@ namespace Es6Util
 			return result.ToString();
 		}
 
-		private static string ConvertFromEs6(string content, string eol, Match oldModuleMatch)
+		private static string ConvertFromEs6(string content, string eol, Match oldModuleMatch, string originalFileName)
 		{
 			bool useStrict = ContainsUseStrictDirective(oldModuleMatch);
 			bool eolAfterUseStrict = ContainsEolAfterUseStrict(oldModuleMatch);
@@ -304,7 +304,8 @@ namespace Es6Util
 				body = content;
 			}
 
-			body = body.TrimEnd().Replace("export default", "return");
+			body = body.TrimEnd();
+			body = ReplaceExportWithReturn(body, eol, oldModuleMatch, originalFileName);
 
 			var bodyLines = body.Split(new[] {"\r\n", "\n"}, StringSplitOptions.None);
 
@@ -322,6 +323,32 @@ namespace Es6Util
 			result.Append("});");
 
 			return result.ToString();
+		}
+
+		private static string ReplaceExportWithReturn(string body, string eol, Match oldModuleMatch, string originalFile)
+		{
+			string exportDefaultPattern = "export default";
+			int exportLocation = body.IndexOf(exportDefaultPattern, StringComparison.InvariantCulture);
+
+			if (exportLocation < 0)
+				return body;
+
+			var exportFunctionInOriginalFile = FindExportFunction(oldModuleMatch);
+			if (exportFunctionInOriginalFile != null)
+			{
+				var exportVarName = Path.GetFileNameWithoutExtension(originalFile);
+				string extractedVarDeclaration = $"const {exportVarName} = ";
+				string exportStatement = $"export default {exportVarName};";
+
+				body = body
+					.Replace(exportStatement, string.Empty).TrimEnd()
+					.Replace(extractedVarDeclaration, "return ");
+
+				return body;
+			}
+
+			body = body.Replace(exportDefaultPattern, "return");
+			return body;
 		}
 
 		private static bool ContainsUseStrictDirective(Match oldModuleMatch) =>
@@ -361,6 +388,28 @@ namespace Es6Util
 		{
 			var grp = oldModuleMatch.Groups["pnames"];
 			return grp.Success && grp.Value.EndsWith("\n");
+		}
+
+		private static Match FindExportFunction(Match oldModuleMatch)
+		{
+			if (!oldModuleMatch.Success)
+				return null;
+
+			string oldBody = oldModuleMatch.Groups["body"].Value;
+			var lastReturnStatement = FindLastReturnStatementInOutermostScope(oldBody);
+
+			if (!lastReturnStatement.Success)
+				return null;
+
+			var oldSuffix = oldBody.Substring(
+				lastReturnStatement.Index + lastReturnStatement.Length);
+
+			var functionDeclarationMatch = _functionDeclarationPattern.Match(oldSuffix);
+
+			if (!functionDeclarationMatch.Success)
+				return null;
+
+			return functionDeclarationMatch;
 		}
 
 		private static string GetEol(string originalContent) =>
