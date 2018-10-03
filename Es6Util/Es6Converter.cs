@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -11,41 +10,78 @@ namespace Es6Util
 	public static class Es6Converter
 	{
 		public static void UpdateConvertedDirectory(string inputPath, string outputPath) =>
-			SyncDirectories(inputPath, outputPath, CreateConvertedFile);
+			SyncDirectories(inputPath, outputPath, CreateConvertedFile, syncNonJsFiles: false);
 
-		public static void UpdateOriginalDirectory(string convertedPath, string originalPath) =>
-			SyncDirectories(convertedPath, originalPath, UpdateOriginalFile);
+		public static void UpdateOriginalDirectory(string convertedPath, string originalPath, string[] excludes) =>
+			SyncDirectories(convertedPath, originalPath, UpdateOriginalFile, syncNonJsFiles: true, excludes);
 
-		private static void SyncDirectories(string inputPath, string outputPath, Action<string, string> syncFiles)
+		private static void SyncDirectories(string inputPath, string outputPath, Action<string, string> syncFiles, bool syncNonJsFiles, string[] excludes = null)
 		{
 			var inputDir = new DirectoryInfo(inputPath);
 			if (!inputDir.Exists)
 				return;
 
-			string searchPattern = "*.js";
-			foreach (var inputFileInfo in inputDir.EnumerateFiles(searchPattern, SearchOption.AllDirectories))
+			string jsExt = ".js";
+			foreach (var inputFileInfo in inputDir.EnumerateFiles("*.*", SearchOption.AllDirectories))
 			{
-				var inputFile = inputFileInfo.FullName;
-				var outputFile = outputPath + inputFile.Substring(inputPath.Length);
+				if (excludes != null)
+				{
+					var relativePath = inputFileInfo.FullName.Substring(inputDir.FullName.Length + 1);
 
-				string outputSubdir = Path.GetDirectoryName(outputFile);
-				if (outputSubdir == null)
-					throw new Exception($"Failed to get parent dir for: {outputFile}");
+					var subdir = getTopLevelDir(relativePath);
+					bool isExcluded = excludes.Contains(subdir, StringComparer.OrdinalIgnoreCase);
+					if (isExcluded)
+						continue;
+				}
 
-				Directory.CreateDirectory(outputSubdir);
+				if (isJs(inputFileInfo) || syncNonJsFiles)
+				{
+					var inputFile = inputFileInfo.FullName;
+					var outputFile = outputPath + inputFile.Substring(inputPath.Length);
 
-				syncFiles(inputFile, outputFile);
+					string outputSubdir = Path.GetDirectoryName(outputFile);
+					if (outputSubdir == null)
+						throw new Exception($"Failed to get parent dir for: {outputFile}");
+
+					Directory.CreateDirectory(outputSubdir);
+
+					if (isJs(inputFileInfo))
+						syncFiles(inputFile, outputFile);
+					else
+						File.Copy(inputFile, outputFile, overwrite: true);
+				}
 			}
 
 			var outputDir = new DirectoryInfo(outputPath);
-
-			foreach (var outputFileInfo in outputDir.EnumerateFiles(searchPattern, SearchOption.AllDirectories))
+			foreach (var outputFileInfo in outputDir.EnumerateFiles("*.*", SearchOption.AllDirectories))
 			{
-				var outputFile = outputFileInfo.FullName;
-				var inputFile = inputPath + outputFile.Substring(outputPath.Length);
+				if (syncNonJsFiles || isJs(outputFileInfo))
+				{
+					var outputFile = outputFileInfo.FullName;
+					var inputFile = inputPath + outputFile.Substring(outputPath.Length);
+					if (!File.Exists(inputFile))
+						File.Delete(outputFile);
+				}
+			}
 
-				if (!File.Exists(inputFile))
-					File.Delete(outputFile);
+			bool isJs(FileInfo f) => f.Extension.Equals(jsExt, StringComparison.OrdinalIgnoreCase);
+
+			string getTopLevelDir(string path)
+			{
+				string subdir = Path.GetDirectoryName(path);
+				if (string.IsNullOrEmpty(subdir))
+					return subdir;
+
+				while (true)
+				{
+					string parent = Path.GetDirectoryName(subdir);
+					if (string.IsNullOrEmpty(parent))
+						break;
+
+					subdir = parent;
+				}
+
+				return subdir;
 			}
 		}
 
@@ -68,7 +104,7 @@ namespace Es6Util
 			File.WriteAllText(outputFile, convertedContent);
 		}
 
-		public static void UpdateOriginalFile(string convertedFile, string originalFile)
+		private static void UpdateOriginalFile(string convertedFile, string originalFile)
 		{
 			var convertedContent = new Lazy<string>(() =>
 				File.ReadAllText(convertedFile));
@@ -112,6 +148,9 @@ namespace Es6Util
 				return content;
 
 			var result = new StringBuilder();
+
+			if (match.Groups["leadcomment"].Success)
+				result.Append(match.Groups["leadcomment"].Value);
 
 			var moduleNameCaptures = match.Groups["mname"].Captures;
 			var variableNameCaptures = match.Groups["pname"].Captures;
@@ -207,7 +246,6 @@ namespace Es6Util
 				.ToArray();
 
 			var result = new StringBuilder();
-
 			result.Append("define(");
 
 			if (hasModuleList)
@@ -293,6 +331,8 @@ namespace Es6Util
 					result.Append(eol);
 			}
 
+			var leadCommentMatch = _leadCommentPattern.Match(content);
+
 			string body;
 			if (importMatches.Count > 0)
 			{
@@ -301,11 +341,21 @@ namespace Es6Util
 			}
 			else
 			{
-				body = content;
+				if (leadCommentMatch.Success)
+					body = content.Substring(leadCommentMatch.Index + leadCommentMatch.Length);
+				else
+					body = content;
+			}
+
+			if (leadCommentMatch.Success &&
+				!string.IsNullOrWhiteSpace(leadCommentMatch.Value) &&
+				!body.TrimStart().StartsWith(leadCommentMatch.Value))
+			{
+				result.Insert(0, leadCommentMatch.Value);
 			}
 
 			body = body.TrimEnd();
-			body = ReplaceExportWithReturn(body, eol, oldModuleMatch, originalFileName);
+			body = ReplaceExportWithReturn(body, oldModuleMatch, originalFileName);
 
 			var bodyLines = body.Split(new[] {"\r\n", "\n"}, StringSplitOptions.None);
 
@@ -325,7 +375,7 @@ namespace Es6Util
 			return result.ToString();
 		}
 
-		private static string ReplaceExportWithReturn(string body, string eol, Match oldModuleMatch, string originalFile)
+		private static string ReplaceExportWithReturn(string body, Match oldModuleMatch, string originalFile)
 		{
 			string exportDefaultPattern = "export default";
 			int exportLocation = body.IndexOf(exportDefaultPattern, StringComparison.InvariantCulture);
@@ -494,6 +544,7 @@ namespace Es6Util
 			return null;
 		}
 
+		private static readonly Regex _leadCommentPattern = new Regex(@"^(?<leadcomment>(\s*(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)))*\s*)");
 		private static readonly Regex _commentOrStringLiteralPattern = new Regex(@"(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)|'(?:[^']|(?<=\\)')*'|""(?:[^""]|(?<=\\)"")*"")");
 
 		private static readonly Regex _scopeOpenerPattern = new Regex("{");
@@ -505,7 +556,7 @@ namespace Es6Util
 		private static readonly Regex _useStrictPattern = new Regex(@"^[\s\n]*('use strict'|""use strict"");[\s\n]*\n");
 
 		private static readonly Regex _oldModulePattern = new Regex(
-			@"^\s*define\s*\(\s*(?<mnames>\[\s*(?:'(?<mname>[^']+)'\s*(,|(?=\s*\]))\s*)*\]\s*,\s*)?function(?<wsbeforeparams>\s*)\((?<pnames>\s*(?:(?<pname>[^\s]+)\s*(,|(?=\s*\)))\s*)*\s*)?\)\s*\{(?<body>(.*\n)*)\s*\}\s*\)\s*;\s*$");
+			@"^(?<leadcomment>(\s*(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)))*\s*)define\s*\(\s*(?<mnames>\[\s*(?:'(?<mname>[^']+)'\s*(,|(?=\s*\]))\s*)*\]\s*,\s*)?function(?<wsbeforeparams>\s*)\((?<pnames>\s*(?:(?<pname>[^\s]+)\s*(,|(?=\s*\)))\s*)*\s*)?\)\s*\{(?<body>(.*\n)*)\s*\}\s*\)\s*;\s*$");
 
 		private static readonly Regex _es6ImportsPattern = new Regex(@"import (?:(?<pname>[^\s]+) from )?'(?<mname>[^']+)';(?:\r?\n)(?<emptyline>\r?\n)?");
 	}

@@ -15,8 +15,8 @@ namespace Es6Util.Test
 		[Test]
 		public void Update_original_directories()
 		{
-			Es6Converter.UpdateOriginalDirectory(convertedSourceDir, sourceDir);
-			Es6Converter.UpdateOriginalDirectory(convertedTestDir, testDir);
+
+			Es6Converter.UpdateOriginalDirectory(convertedDir, dir, excludes);
 		}
 
 		[Test]
@@ -30,7 +30,18 @@ namespace Es6Util.Test
 		const string sourceDir = @"D:\repo\Git\shopping-experience-develop-2\application\src";
 		const string convertedSourceDir = @"D:\repo\Git\shopping-experience-develop\application\src";
 
-		const string testDir = @"D:\repo\Git\shopping-experience-develop-2\application\tests";
-		const string convertedTestDir = @"D:\repo\Git\shopping-experience-develop\application\tests";
+		const string dir = @"D:\repo\Git\shopping-experience-develop-2\application";
+		const string convertedDir = @"D:\repo\Git\shopping-experience-develop\application";
+
+		private static readonly string[] excludes =
+		{
+			".idea",
+			".vs",
+			".vscode",
+			"dist",
+			"gulp",
+			"node_modules",
+			"target"
+		};
 	}
 }
