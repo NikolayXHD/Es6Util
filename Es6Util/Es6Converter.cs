@@ -209,7 +209,12 @@ namespace Es6Util
 				{
 					var exportVarName = Path.GetFileNameWithoutExtension(fileName);
 					result.Append($"const {exportVarName} =");
-					result.Append(suffix);
+					string trimmedSuffix = suffix.TrimEnd();
+					if (!trimmedSuffix.EndsWith(";"))
+						result.Append(trimmedSuffix).AppendLine(";");
+					else
+						result.Append(suffix);
+
 					result.AppendLine($"export default {exportVarName};");
 				}
 				else
@@ -245,6 +250,11 @@ namespace Es6Util
 				.TakeWhile(m => m.Groups["pname"].Success)
 				.ToArray();
 
+			char moduleNameQuote = oldModuleMatch.Groups["mname"].Success &&
+				oldModuleMatch.Value[oldModuleMatch.Groups["mname"].Index - 1] == '"'
+					? '"'
+					: '\'';
+
 			var result = new StringBuilder();
 			result.Append("define(");
 
@@ -262,7 +272,7 @@ namespace Es6Util
 					if (multilineModuleList)
 						result.Append("\t");
 
-					result.Append("'").Append(match.Groups["mname"].Value).Append("'");
+					result.Append(moduleNameQuote).Append(match.Groups["mname"].Value).Append(moduleNameQuote);
 
 					if (i < importMatches.Count - 1)
 					{
@@ -362,7 +372,15 @@ namespace Es6Util
 			foreach (string line in bodyLines)
 			{
 				if (!string.IsNullOrWhiteSpace(line))
-					result.Append('\t').Append(line).Append(eol);
+				{
+					const string whitespaceIndent = "    ";
+					if (line.StartsWith(whitespaceIndent))
+						result.Append(whitespaceIndent);
+					else
+						result.Append('\t');
+
+					result.Append(line).Append(eol);
+				}
 				else
 					result.Append(eol);
 			}
@@ -556,7 +574,7 @@ namespace Es6Util
 		private static readonly Regex _useStrictPattern = new Regex(@"^[\s\n]*('use strict'|""use strict"");[\s\n]*\n");
 
 		private static readonly Regex _oldModulePattern = new Regex(
-			@"^(?<leadcomment>(\s*(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)))*\s*)define\s*\(\s*(?<mnames>\[\s*(?:'(?<mname>[^']+)'\s*(,|(?=\s*\]))\s*)*\]\s*,\s*)?function(?<wsbeforeparams>\s*)\((?<pnames>\s*(?:(?<pname>[^\s]+)\s*(,|(?=\s*\)))\s*)*\s*)?\)\s*\{(?<body>(.*\n)*)\s*\}\s*\)\s*;\s*$");
+			@"^(?<leadcomment>(\s*(?:\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/.*(?:\n|$)))*\s*)define\s*\(\s*(?<mnames>\[\s*(?:(?:'(?<mname>[^']+)'|""(?<mname>[^""]+)"")\s*(,|(?=\s*\]))\s*)*\]\s*,\s*)?function(?<wsbeforeparams>\s*)\((?<pnames>\s*(?:(?<pname>[^\s]+)\s*(,|(?=\s*\)))\s*)*\s*)?\)\s*\{(?<body>(.*\n)*)\s*\}\s*\)\s*;\s*$");
 
 		private static readonly Regex _es6ImportsPattern = new Regex(@"import (?:(?<pname>[^\s]+) from )?'(?<mname>[^']+)';(?:\r?\n)(?<emptyline>\r?\n)?");
 	}
